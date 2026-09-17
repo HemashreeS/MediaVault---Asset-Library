@@ -27,7 +27,14 @@ Roughly, and how you split it.
 | # | Defect | Where | Fixed / left / out of scope |
 | --- | --- | --- | --- |
 | 1 | Bulk update sends >50 ids in one call | `App.tsx` | |
-| 2 | | | |
+| 2 | In-flight requests are not cancelled or deduplicated | | |
+| 3 | Query state and cursor are not synchronized/reset correctly | | |
+| 4 | Thumbnail loading/failure is not handled efficiently | | |
+| 5 | All loaded assets are rendered without virtualization | | |
+| 6 | Search requests are fired on every keystroke | | |
+| 7 | Cursor pagination is not implemented; the frontend only loads the initial 24 assets despite receiving nextCursor | | |
+| 8 | Keyboard navigation, focus management and screen-reader feedback are missing | | |
+| 9 | Asset card content is clipped because the card uses overflow: hidden with the current layout | | |
 
 ---
 
