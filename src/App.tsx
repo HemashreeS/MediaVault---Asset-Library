@@ -5,6 +5,7 @@ import { AssetGrid } from '@/features/assets/AssetGrid';
 import { useAssets } from '@/features/assets/useAssets';
 import { statusLabel } from '@/lib/format';
 import type { Asset, AssetStatus, AssetQuery } from '@/lib/types';
+import { useAssetUrlQuery } from './features/assets/useAssetUrlQuery';
 
 const STATUSES: AssetStatus[] = ['draft', 'in_review', 'approved', 'archived'];
 const SORTS: Array<{ value: NonNullable<AssetQuery['sort']>; label: string }> = [
@@ -15,15 +16,18 @@ const SORTS: Array<{ value: NonNullable<AssetQuery['sort']>; label: string }> = 
 ];
 
 export function App() {
-  const [q, setQ] = useState('');
-  const [status, setStatus] = useState<AssetStatus[]>([]);
-  const [sort, setSort] = useState<NonNullable<AssetQuery['sort']>>('updatedAt:desc');
+  const { query: urlQuery, updateQuery } = useAssetUrlQuery();
+
+  const q = urlQuery.q ?? '';
+  const status = urlQuery.status ?? [];
+  const sort = urlQuery.sort ?? 'updatedAt:desc';
+  const kind = urlQuery.kind ?? [];
+  const tag = urlQuery.tag ?? [];
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [activeId, setActiveId] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
 
-  // Every keystroke sends a request. Nothing is debounced or cancelled.
-  const { items, total, loading, error } = useAssets({ q, status, sort, limit: 24 });
+  const { items, total, loading, error } = useAssets({ q, status, kind, tag, sort, limit: 24 });
 
   function toggleSelect(id: string) {
     setSelectedIds((prev) => {
@@ -61,9 +65,9 @@ export function App() {
           type="search"
           placeholder="Search assets"
           value={q}
-          onChange={(e) => setQ(e.target.value)}
+          onChange={(e) => updateQuery({ q: e.target.value })}
         />
-        <select value={sort} onChange={(e) => setSort(e.target.value as typeof sort)}>
+        <select value={sort} onChange={(e) => updateQuery({ sort: e.target.value as NonNullable<AssetQuery['sort']> })}>
           {SORTS.map((option) => (
             <option key={option.value} value={option.value}>
               {option.label}
@@ -78,17 +82,19 @@ export function App() {
             <input
               type="checkbox"
               checked={status.includes(s)}
-              onChange={(e) =>
-                setStatus((prev) =>
-                  e.target.checked ? [...prev, s] : prev.filter((x) => x !== s),
-                )
-              }
+              onChange={(e) => {
+                const nextStatus = e.target.checked
+                  ? [...status, s]
+                  : status.filter((x) => x !== s);
+
+                updateQuery({ status: nextStatus });
+              }}
             />
             {statusLabel(s)}
           </label>
         ))}
         <span className="muted">
-          {loading ? 'Loading…' : `${items.length} of ${total.toLocaleString()} shown`}
+          {loading ? 'Loading…' : error ? "Unable to load results...": `${items.length} of ${total.toLocaleString()} shown`}
         </span>
       </div>
 
@@ -105,16 +111,26 @@ export function App() {
       )}
 
       {notice && <p className="notice">{notice}</p>}
-      {error && <p className="error">{error}</p>}
 
       <main className="content">
-        <AssetGrid
-          assets={items}
-          selectedIds={selectedIds}
-          activeId={activeId}
-          onToggleSelect={toggleSelect}
-          onOpen={setActiveId}
-        />
+        {loading ? (
+          <div className="state-message" role="status">
+            Loading assets…
+          </div>
+        ) : error ? (
+          <div className="state-message error" role="alert">
+            Couldn’t load assets. {error}
+          </div>
+        ) : (
+          <AssetGrid
+            assets={items}
+            selectedIds={selectedIds}
+            activeId={activeId}
+            onToggleSelect={toggleSelect}
+            onOpen={setActiveId}
+          />
+        )}
+
         {activeId && (
           <AssetDetail id={activeId} onClose={() => setActiveId(null)} onSaved={handleSaved} />
         )}

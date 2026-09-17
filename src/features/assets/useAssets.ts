@@ -1,48 +1,34 @@
-import { useEffect, useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { listAssets } from '@/api/client';
-import type { Asset, AssetQuery } from '@/lib/types';
+import type { AssetQuery } from '@/lib/types';
+import { useDebouncedValue } from './useDebouncedValue';
 
-interface State {
-  items: Asset[];
-  total: number;
-  nextCursor: string | null;
-  loading: boolean;
-  error: string | null;
-}
 
 /**
  * Baseline loader. Reviewers know this hook is wrong in several ways.
  * Replacing it wholesale is expected and encouraged.
  */
 export function useAssets(query: AssetQuery) {
-  const [state, setState] = useState<State>({
-    items: [],
-    total: 0,
-    nextCursor: null,
-    loading: true,
-    error: null,
+  const debouncedQ = useDebouncedValue(query.q ?? '', 300);
+
+  const requestQuery: AssetQuery = {
+    ...query,
+    q: debouncedQ.trim() || undefined,
+  };
+
+  const result = useQuery({
+    queryKey: ['assets', requestQuery],
+    queryFn: ({ signal }) => listAssets(requestQuery, signal),
+    retry: false,
+    staleTime: 30_000,
+    refetchOnWindowFocus: false,
   });
 
-  useEffect(() => {
-    setState((s) => ({ ...s, loading: true, error: null }));
-    listAssets(query)
-      .then((page) => {
-        setState({
-          items: page.items,
-          total: page.total,
-          nextCursor: page.nextCursor,
-          loading: false,
-          error: null,
-        });
-      })
-      .catch((err: unknown) => {
-        setState((s) => ({
-          ...s,
-          loading: false,
-          error: err instanceof Error ? err.message : 'Something went wrong',
-        }));
-      });
-  }, [JSON.stringify(query)]);
-
-  return state;
+  return {
+    items: result.data?.items ?? [],
+    total: result.data?.total ?? 0,
+    nextCursor: result.data?.nextCursor ?? null,
+    loading: result.isPending,
+    error: result.error instanceof Error ? result.error.message : null,
+  };
 }
