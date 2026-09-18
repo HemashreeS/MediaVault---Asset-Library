@@ -18,7 +18,9 @@ Anything we need to know beyond `npm install && npm run dev`.
 
 ## Time spent
 
-Roughly, and how you split it.
+- Task 0 — ~1 hr
+- Task 1 — ~3 hrs
+- Task 2 - ~6 hrs
 
 ---
 
@@ -28,13 +30,13 @@ Roughly, and how you split it.
 | --- | --- | --- | --- |
 | 1 | Bulk update sends >50 ids in one call | `App.tsx` | |
 | 2 | In-flight requests are not cancelled or deduplicated | `useAssets.ts`, `api/client.ts` | Fixed |
-| 3 | Query state and cursor are not synchronized/reset correctly | | |
-| 4 | Thumbnail loading/failure is not handled efficiently | | |
-| 5 | All loaded assets are rendered without virtualization | | |
+| 3 | Query state and cursor are not synchronized/reset correctly | `useAssets.ts`, `useAssetUrlQuery.ts` | Fixed |
+| 4 | Thumbnail loading/failure is not handled efficiently | `AssetCard.tsx`, `AssetDetail.tsx` | Fixed |
+| 5 | All loaded assets are rendered without virtualization | `AssetGrid.tsx` | Fixed |
 | 6 | Search requests are fired on every keystroke | `App.tsx`, `useAssets.ts` | Fixed |
-| 7 | Cursor pagination is not implemented; the frontend only loads the initial 24 assets despite receiving nextCursor | | |
+| 7 | Cursor pagination is not implemented; the frontend only loads the initial 24 assets despite receiving nextCursor | `useAssets.ts` | Fixed |
 | 8 | Keyboard navigation, focus management and screen-reader feedback are missing | | |
-| 9 | Asset card content is clipped because the card uses overflow: hidden with the current layout | | |
+| 9 | Asset card content is clipped because the card uses overflow: hidden with the current layout | `styles.css` | Fixed |
 
 ---
 
@@ -59,6 +61,12 @@ six of these is about right.
 
 **Virtualization approach**
 
+- Chose row virtualization with `@tanstack/react-virtual` rather than rendering every loaded asset.
+- Virtualization is applied at the row level so the responsive multi-column grid can still adapt between different viewport widths.
+- Used a small overscan value to keep scrolling visually smooth without creating a large DOM.
+- Kept cursor pagination separate from virtualization: pagination controls how many assets are loaded, while virtualization controls how many loaded assets are mounted.
+- Measured the result during scrolling and observed approximately 35 rendered cards while approximately 350 assets had been loaded.
+
 **Optimistic updates and rollback**
 
 **Retry and backoff policy**
@@ -78,13 +86,14 @@ Fill in real measurements, not estimates. Say which machine and browser.
 
 | Metric | Before | After | How measured |
 | --- | --- | --- | --- |
-| Rendered DOM nodes at 5,000 rows loaded | | | |
-| Cards re-rendered when toggling one selection | | | |
-| Longest task during sustained scroll | | | |
-| Requests fired while typing a 6-character query | 6 api calls triggered | 1 api call triggered | Chrome DevTools Network|
+| Rendered DOM nodes at 5,000 rows loaded | all cards | ~35 cards for ~350 assets loaded | document.querySelectorAll('.grid .card').length |
+| Cards re-rendered when toggling one selection | Many visible cards | 1-2 affected cards | Temporary React.memo comparator + render logging |
+| Longest task during sustained scroll | - | 29.39 ms | Chrome DevTools Performance recording while scrolling |
+| Requests fired while typing a 6-character query | 6 api calls | 1 api call | Chrome DevTools Network|
 | Production bundle, gzipped | | | |
 
 What was the actual bottleneck, and how did you find it?
+The main bottlenecks were unnecessary rendering of the growing asset list and rendering all loaded cards directly into the DOM. The baseline grid rendered every loaded asset, while selection changes also caused the card tree to re-render through the parent. I addressed this with cursor-based infinite pagination, row virtualization, debounced/cancellable search, and memoized AssetCard components. Chrome DevTools measurements after the changes showed ~35 rendered cards with ~350 assets loaded and a longest observed scroll task of 29.39 ms.
 
 ---
 
@@ -116,6 +125,9 @@ Screenshots in the repo are welcome — link them here.
 ## Trade-offs and cuts
 
 What you deliberately did not do, and what you would do with another day.
+- I prioritized cursor pagination, virtualization, lazy thumbnail loading and render optimization before adding more UI features. The goal was to make the asset list reliable at scale rather than optimize only the initial viewport.
+- I did not attempt to eliminate intentional 503 failures at the infinite-scroll layer. Retry and backoff belong in the API/query resilience layer and are planned for the resilience task.
+- I did not change the server or API contract.
 
 ## Critique of the API
 
@@ -125,3 +137,5 @@ What you deliberately did not do, and what you would do with another day.
 
 - The search pipeline and request cancellation/deduplication implemented with TanStack Query.
 - The decision to debounce search by 300ms and use URL-based query state.
+- The separation between cursor pagination and row virtualization for the asset grid.
+- The `AssetCard` memoization and thumbnail fallback behavior.

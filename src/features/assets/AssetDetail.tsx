@@ -19,10 +19,12 @@ export function AssetDetail({ id, onClose, onSaved }: Props) {
   const [asset, setAsset] = useState<Asset | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const [thumbnailError, setThumbnailError] = useState(false);
 
   useEffect(() => {
     setAsset(null);
     setError(null);
+    setThumbnailError(false);
     getAsset(id)
       .then(setAsset)
       .catch((err: unknown) => setError(err instanceof Error ? err.message : 'Load failed'));
@@ -55,7 +57,21 @@ export function AssetDetail({ id, onClose, onSaved }: Props) {
 
       {asset && (
         <div className="panel__body">
-          <img className="panel__thumb" src={thumbnailUrl(asset.id)} alt="" />
+          {asset.hasThumbnail && !thumbnailError ? (
+            <img
+              className="panel__thumb"
+              src={thumbnailUrl(asset.id)}
+              alt=""
+              onError={() => setThumbnailError(true)}
+            />
+          ) : (
+            <div
+              className="panel__thumb panel__thumb--placeholder"
+              aria-label="Thumbnail unavailable"
+            >
+              <span>Preview unavailable</span>
+            </div>
+          )}
           <h3>{asset.name}</h3>
           <dl className="facts">
             <dt>Id</dt>

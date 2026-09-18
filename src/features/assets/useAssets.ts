@@ -1,4 +1,4 @@
-import { useQuery } from '@tanstack/react-query';
+import { useInfiniteQuery } from '@tanstack/react-query';
 import { listAssets } from '@/api/client';
 import type { AssetQuery } from '@/lib/types';
 import { useDebouncedValue } from './useDebouncedValue';
@@ -16,19 +16,30 @@ export function useAssets(query: AssetQuery) {
     q: debouncedQ.trim() || undefined,
   };
 
-  const result = useQuery({
+  const result = useInfiniteQuery({
     queryKey: ['assets', requestQuery],
-    queryFn: ({ signal }) => listAssets(requestQuery, signal),
+    initialPageParam: undefined as string | undefined,
+    queryFn: ({ pageParam, signal }) => listAssets({...requestQuery, cursor: pageParam}, signal),
+    getNextPageParam: (lastPage) => lastPage.nextCursor ?? undefined,
     retry: false,
     staleTime: 30_000,
     refetchOnWindowFocus: false,
   });
 
+  const items = result.data?.pages.flatMap((page) => page.items) ?? [];
+
+  const total = result.data?.pages[0]?.total ?? 0;
+
+  const nextCursor = result.data?.pages.at(-1)?.nextCursor ?? null;
+
   return {
-    items: result.data?.items ?? [],
-    total: result.data?.total ?? 0,
-    nextCursor: result.data?.nextCursor ?? null,
+    items,
+    total,
+    nextCursor,
     loading: result.isPending,
+    loadingMore: result.isFetchingNextPage,
+    hasNextPage: result.hasNextPage,
+    fetchNextPage: result.fetchNextPage,
     error: result.error instanceof Error ? result.error.message : null,
   };
 }

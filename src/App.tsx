@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useCallback, useState } from 'react';
 import { bulkSetStatus } from '@/api/client';
 import { AssetDetail } from '@/features/assets/AssetDetail';
 import { AssetGrid } from '@/features/assets/AssetGrid';
@@ -6,6 +6,7 @@ import { useAssets } from '@/features/assets/useAssets';
 import { statusLabel } from '@/lib/format';
 import type { Asset, AssetStatus, AssetQuery } from '@/lib/types';
 import { useAssetUrlQuery } from './features/assets/useAssetUrlQuery';
+import { useInfiniteScroll } from './features/assets/useInfiniteScroll';
 
 const STATUSES: AssetStatus[] = ['draft', 'in_review', 'approved', 'archived'];
 const SORTS: Array<{ value: NonNullable<AssetQuery['sort']>; label: string }> = [
@@ -27,16 +28,22 @@ export function App() {
   const [activeId, setActiveId] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
 
-  const { items, total, loading, error } = useAssets({ q, status, kind, tag, sort, limit: 24 });
+  const { items, total, loading, error, loadingMore, hasNextPage, fetchNextPage } = useAssets({ q, status, kind, tag, sort, limit: 24 });
+  const scrollRef = useInfiniteScroll({ hasNextPage, loading, loadingMore, onLoadMore: fetchNextPage });
 
-  function toggleSelect(id: string) {
+  const toggleSelect = useCallback((id: string) => {
     setSelectedIds((prev) => {
       const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
+
+      if (next.has(id)) {
+        next.delete(id);
+      } else {
+        next.add(id);
+      }
+
       return next;
     });
-  }
+  }, []);
 
   async function applyBulkStatus(next: AssetStatus) {
     const ids = [...selectedIds];
@@ -94,7 +101,7 @@ export function App() {
           </label>
         ))}
         <span className="muted">
-          {loading ? 'Loading…' : error ? "Unable to load results...": `${items.length} of ${total.toLocaleString()} shown`}
+          {loading ? 'Loading…' : error ? "Unable to load results..." : `${items.length} of ${total.toLocaleString()} shown`}
         </span>
       </div>
 
@@ -122,13 +129,17 @@ export function App() {
             Couldn’t load assets. {error}
           </div>
         ) : (
-          <AssetGrid
-            assets={items}
-            selectedIds={selectedIds}
-            activeId={activeId}
-            onToggleSelect={toggleSelect}
-            onOpen={setActiveId}
-          />
+          <>
+            <AssetGrid
+              assets={items}
+              selectedIds={selectedIds}
+              activeId={activeId}
+              onToggleSelect={toggleSelect}
+              onOpen={setActiveId}
+              scrollRef={scrollRef}
+              loadingMore={loadingMore}
+            />
+          </>
         )}
 
         {activeId && (
