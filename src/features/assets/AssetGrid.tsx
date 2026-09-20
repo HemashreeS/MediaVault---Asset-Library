@@ -8,7 +8,7 @@ interface Props {
   assets: Asset[];
   selectedIds: Set<string>;
   activeId: string | null;
-  onToggleSelect: (id: string) => void;
+  onToggleSelect: (id: string, shiftKey?: boolean) => void;
   onOpen: (id: string) => void;
   scrollRef?: React.Ref<HTMLDivElement>;
   loadingMore?: boolean;

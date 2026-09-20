@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { getAsset, thumbnailUrl, updateAsset } from '@/api/client';
+import { ApiError, getAsset, thumbnailUrl, updateAsset } from '@/api/client';
 import { formatBytes, formatDate, formatDuration, statusLabel } from '@/lib/format';
 import type { Asset, AssetStatus } from '@/lib/types';
 
@@ -31,7 +31,13 @@ export function AssetDetail({ id, onClose, onSaved }: Props) {
   }, [id]);
 
   async function setStatus(status: AssetStatus) {
-    if (!asset) return;
+    if (!asset || saving) {
+      return;
+    }
+    if (asset.tags.includes('legal-hold')) {
+      setError('This asset is on legal hold and its status cannot be changed.');
+      return;
+    }
     setSaving(true);
     setError(null);
     try {
@@ -39,21 +45,57 @@ export function AssetDetail({ id, onClose, onSaved }: Props) {
       setAsset(updated);
       onSaved(updated);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Save failed');
+      if ( err instanceof ApiError && err.code === 'version_conflict' ) {
+        try {
+          const latest = await getAsset(asset.id);
+          setAsset(latest);
+          onSaved(latest);
+          setError(
+            'This asset was changed by someone else. ' +
+            'The latest version has been loaded. ' +
+            'Please review it and apply your change again.',
+          );
+        } catch (refreshError) {
+          setError(
+            refreshError instanceof Error
+              ? `The asset was changed by someone else, but the latest version could not be loaded. ${refreshError.message}`
+              : 'The asset was changed by someone else, but the latest version could not be loaded.',
+          );
+        }
+      } else {
+        const message = err instanceof Error ? err.message : 'Save failed';
+        setError(message);
+      }
     } finally {
       setSaving(false);
     }
   }
+  const isLegalHold = asset?.tags.includes('legal-hold') ?? false;
 
   return (
     <aside className="panel">
       <div className="panel__head">
         <h2>Asset detail</h2>
-        <button onClick={onClose}>Close</button>
+        <button onClick={onClose} disabled={saving}>Close</button>
       </div>
 
-      {error && <p className="error">{error}</p>}
-      {!asset && !error && <p className="muted">Loading…</p>}
+      {error && (
+        <p
+          className="error"
+          role="alert"
+        >
+          {error}
+        </p>
+      )}
+
+      {!asset && !error && (
+        <p
+          className="muted"
+          role="status"
+        >
+          Loading…
+        </p>
+      )}
 
       {asset && (
         <div className="panel__body">
@@ -111,11 +153,18 @@ export function AssetDetail({ id, onClose, onSaved }: Props) {
           )}
 
           <p className="muted">Status</p>
+          {isLegalHold && (
+            <p className="muted" role="status">
+              Status cannot be changed because this
+              asset is on legal hold.
+            </p>
+          )}
+
           <div className="row">
             {STATUSES.map((status) => (
               <button
                 key={status}
-                disabled={saving || status === asset.status}
+                disabled={saving || isLegalHold || status === asset.status}
                 onClick={() => setStatus(status)}
               >
                 {statusLabel(status)}

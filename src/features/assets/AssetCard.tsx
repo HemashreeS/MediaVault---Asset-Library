@@ -7,7 +7,7 @@ interface Props {
     asset: Asset;
     selected: boolean;
     active: boolean;
-    onToggleSelect: (id: string) => void;
+    onToggleSelect: (id: string, shiftKey?: boolean) => void;
     onOpen: (id: string) => void;
 }
 
@@ -24,7 +24,7 @@ function AssetCardComponent({
     return (
         <div
             className={`card ${selected ? 'card--selected' : ''} ${active ? 'card--active' : ''
-                }`}
+            }`}
             onClick={() => onOpen(asset.id)}
         >
             {showThumbnail ? (
@@ -63,11 +63,10 @@ function AssetCardComponent({
                     <input
                         type="checkbox"
                         checked={selected}
-                        onChange={(event) => {
+                        onClick={(event) => {
                             event.stopPropagation();
-                            onToggleSelect(asset.id);
+                            onToggleSelect(asset.id, event.shiftKey);
                         }}
-                        onClick={(event) => event.stopPropagation()}
                     />
                     Select
                 </label>

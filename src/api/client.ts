@@ -11,6 +11,22 @@ import type { Asset, AssetPage, AssetQuery, BulkResult } from '@/lib/types';
  *   - callers cannot distinguish "retry this" from "do not retry this"
  */
 
+export class ApiError extends Error {
+  status: number;
+  code: string | null;
+
+  constructor(
+    status: number,
+    code: string | null,
+    message: string,
+  ) {
+    super(message);
+    this.name = 'ApiError';
+    this.status = status;
+    this.code = code;
+  }
+}
+
 function toSearchParams(query: AssetQuery): string {
   const params = new URLSearchParams();
   if (query.q) params.set('q', query.q);
@@ -31,14 +47,17 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
     headers: { 'content-type': 'application/json', ...(init?.headers ?? {}) },
   });
   if (!res.ok) {
+    let code: string | null = null;
     let detail = res.statusText;
     try {
       const body = await res.json();
+      code = body?.error?.code ?? null;
       detail = body?.error?.message ?? detail;
     } catch {
       /* response was not JSON */
     }
-    throw new Error(`${res.status}: ${detail}`);
+
+    throw new ApiError(res.status, code, detail);
   }
   return res.json() as Promise<T>;
 }
@@ -62,7 +81,7 @@ export function updateAsset(
   patch: Partial<Pick<Asset, 'name' | 'status' | 'tags'>>,
 ): Promise<Asset> {
   return request<Asset>(`/api/assets/${id}`, {
-    method: 'PATCH',
+      method: 'PATCH',
     body: JSON.stringify({ version, patch }),
   });
 }
@@ -70,7 +89,7 @@ export function updateAsset(
 export function bulkSetStatus(ids: string[], status: Asset['status']): Promise<BulkResult> {
   // Note: the endpoint rejects more than 50 ids per call.
   return request<BulkResult>('/api/assets/bulk-status', {
-    method: 'POST',
+      method: 'POST',
     body: JSON.stringify({ ids, status }),
   });
 }

@@ -21,6 +21,7 @@ Anything we need to know beyond `npm install && npm run dev`.
 - Task 0 — ~1 hr
 - Task 1 — ~3 hrs
 - Task 2 - ~6 hrs
+- Task 3 - ~9 hrs
 
 ---
 
@@ -28,7 +29,7 @@ Anything we need to know beyond `npm install && npm run dev`.
 
 | # | Defect | Where | Fixed / left / out of scope |
 | --- | --- | --- | --- |
-| 1 | Bulk update sends >50 ids in one call | `App.tsx` | |
+| 1 | Bulk update sends >50 ids in one call | `App.tsx` | Fixed |
 | 2 | In-flight requests are not cancelled or deduplicated | `useAssets.ts`, `api/client.ts` | Fixed |
 | 3 | Query state and cursor are not synchronized/reset correctly | `useAssets.ts`, `useAssetUrlQuery.ts` | Fixed |
 | 4 | Thumbnail loading/failure is not handled efficiently | `AssetCard.tsx`, `AssetDetail.tsx` | Fixed |
@@ -68,8 +69,23 @@ six of these is about right.
 - Measured the result during scrolling and observed approximately 35 rendered cards while approximately 350 assets had been loaded.
 
 **Optimistic updates and rollback**
+- Bulk status changes update the React Query asset cache immediately, before the server confirms the operation.
+- Selected IDs are split into chunks of 50 to respect the API limit.
+- Chunks are processed with bounded concurrency rather than firing one request per asset or all chunks simultaneously.
+- A concurrency limit of 3 was used to balance throughput against the API's rate-limited environment.
+- The previous asset state is captured before the optimistic update so individual failures can be rolled back without reverting successful changes.
+- Successful assets keep the new status and are replaced with the authoritative server response; failed assets are restored from the pre-update snapshot; the user is told which assets failed and the reason.
+- legal_hold failures are treated as permanent and are not offered for retry.
+- Random conflict failures and whole-request failures are treated as retryable, so only the failed subset is retried.
+- Successful assets are never unnecessarily retried or rolled back.
 
 **Retry and backoff policy**
+
+- Retry operates only on the failed subset rather than repeating the complete bulk operation.
+- legal_hold is considered a permanent business-rule failure and is therefore excluded from retry.
+- Transient write conflicts and request-level failures remain retryable.
+- This distinction prevents the UI from repeatedly retrying an operation that the server will never accept.
+- The selected/failed state is retained after partial failure so the user can recover without manually rebuilding the selection.
 
 **State placement and URL sync**
 
@@ -132,6 +148,7 @@ What you deliberately did not do, and what you would do with another day.
 ## Critique of the API
 
 - List errors expose useful error codes and `Retry-After`, but the frontend client currently reduces errors to a generic `Error`, so structured error handling is required on the client. 
+- One limitation is that the bulk status endpoint does not accept per-asset versions, so a stale bulk client cannot detect the same version-conflict condition as a single-asset edit.
 
 ## Anything you would like us to look at
 
@@ -139,3 +156,7 @@ What you deliberately did not do, and what you would do with another day.
 - The decision to debounce search by 300ms and use URL-based query state.
 - The separation between cursor pagination and row virtualization for the asset grid.
 - The `AssetCard` memoization and thumbnail fallback behavior.
+- The bulk optimistic-update flow, including 50-ID chunking and bounded concurrency.
+- The 207 partial-success handling and per-asset rollback behavior.
+- The distinction between permanent legal_hold failures and retryable transient failures.
+- The single-asset 409 version_conflict handling and the decision to load the latest server version instead of automatically overwriting it.
