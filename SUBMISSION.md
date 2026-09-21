@@ -22,6 +22,7 @@ Anything we need to know beyond `npm install && npm run dev`.
 - Task 1 — ~3 hrs
 - Task 2 - ~6 hrs
 - Task 3 - ~9 hrs
+- Task 4 - ~6 hrs
 
 ---
 
@@ -81,11 +82,14 @@ six of these is about right.
 
 **Retry and backoff policy**
 
-- Retry operates only on the failed subset rather than repeating the complete bulk operation.
-- legal_hold is considered a permanent business-rule failure and is therefore excluded from retry.
-- Transient write conflicts and request-level failures remain retryable.
-- This distinction prevents the UI from repeatedly retrying an operation that the server will never accept.
-- The selected/failed state is retained after partial failure so the user can recover without manually rebuilding the selection.
+- Retry logic is centralized in api/client.ts rather than being duplicated across individual queries and mutations.
+- Transient 429 and 503 responses are retried up to 3 total attempts.
+- Retry-After is parsed from the server response and takes precedence over client-side delay calculation.
+- When Retry-After is not supplied, retries use exponential backoff with jitter, capped at 5 seconds.
+- Network failures are also retried, while aborted requests are allowed to terminate immediately.
+400, 409, and 422 errors are structurally represented as ApiError instances and are not retried.
+- This distinction prevents validation errors and version conflicts from being incorrectly treated as transient failures.
+- The UI maps structured errors to actionable messages rather than exposing raw server responses.
 
 **State placement and URL sync**
 
@@ -144,11 +148,16 @@ What you deliberately did not do, and what you would do with another day.
 - I prioritized cursor pagination, virtualization, lazy thumbnail loading and render optimization before adding more UI features. The goal was to make the asset list reliable at scale rather than optimize only the initial viewport.
 - I did not attempt to eliminate intentional 503 failures at the infinite-scroll layer. Retry and backoff belong in the API/query resilience layer and are planned for the resilience task.
 - I did not change the server or API contract.
+- I did not implement an offline write queue. This was intentionally left as a bonus because replaying writes safely would require additional conflict-resolution semantics.
+- I did not retry 400, 409, or 422 responses because these represent client/business-state problems rather than transient transport failures.
+- I did not automatically overwrite a newer asset after a 409 version conflict. The latest server state is loaded and the user is asked to review and reapply the change.
 
 ## Critique of the API
 
 - List errors expose useful error codes and `Retry-After`, but the frontend client currently reduces errors to a generic `Error`, so structured error handling is required on the client. 
 - One limitation is that the bulk status endpoint does not accept per-asset versions, so a stale bulk client cannot detect the same version-conflict condition as a single-asset edit.
+- The frontend now preserves these structured errors through an ApiError rather than reducing every failure to a generic Error.
+- The API's transient failures are useful for testing resilience, but they require the client to distinguish retryable transport failures from validation and business-rule failures.
 
 ## Anything you would like us to look at
 
@@ -160,3 +169,7 @@ What you deliberately did not do, and what you would do with another day.
 - The 207 partial-success handling and per-asset rollback behavior.
 - The distinction between permanent legal_hold failures and retryable transient failures.
 - The single-asset 409 version_conflict handling and the decision to load the latest server version instead of automatically overwriting it.
+- The centralized retry policy for 429, 503 and network failures, including Retry-After and exponential backoff with jitter.
+- The offline handling and automatic recovery when connectivity returns.
+- The single-asset 409 version_conflict handling and the decision to load the latest server version instead of automatically overwriting it.
+- The application-level ErrorBoundary and recovery actions for unexpected component failures.

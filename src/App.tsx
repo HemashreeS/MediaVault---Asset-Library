@@ -4,6 +4,11 @@ import { bulkSetStatus } from '@/api/client';
 import { AssetDetail } from '@/features/assets/AssetDetail';
 import { AssetGrid } from '@/features/assets/AssetGrid';
 import { useAssets } from '@/features/assets/useAssets';
+import { useOnlineStatus } from '@/lib/useOnlineStatus';
+import {
+  getBulkFailureMessage,
+  getUserFacingError,
+} from '@/lib/getUserFacingError';
 import { statusLabel } from '@/lib/format';
 import type { Asset, AssetPage, AssetStatus, AssetQuery } from '@/lib/types';
 import { useAssetUrlQuery } from './features/assets/useAssetUrlQuery';
@@ -12,11 +17,11 @@ import { queryClient } from './lib/queryClient';
 
 const STATUSES: AssetStatus[] = ['draft', 'in_review', 'approved', 'archived'];
 const SORTS: Array<{ value: NonNullable<AssetQuery['sort']>; label: string }> = [
-  { value: 'updatedAt:desc', label: 'Recently updated' },
-  { value: 'name:asc', label: 'Name A–Z' },
-  { value: 'sizeBytes:desc', label: 'Largest first' },
-  { value: 'createdAt:desc', label: 'Newest' },
-];
+    { value: 'updatedAt:desc', label: 'Recently updated' },
+    { value: 'name:asc', label: 'Name A–Z' },
+    { value: 'sizeBytes:desc', label: 'Largest first' },
+    { value: 'createdAt:desc', label: 'Newest' },
+  ];
 
 function chunk<T>(items: T[], size: number): T[][] {
   const chunks: T[][] = [];
@@ -51,13 +56,13 @@ async function runWithConcurrency<T>(tasks: Array<() => Promise<T>>, concurrency
 
 type BulkChunkResult =
   | {
-      ids: string[];
-      result: Awaited<ReturnType<typeof bulkSetStatus>>;
-    }
+    ids: string[];
+    result: Awaited<ReturnType<typeof bulkSetStatus>>;
+  }
   | {
-      ids: string[];
-      error: Error;
-    };
+    ids: string[];
+    error: Error;
+  };
 
 type BulkFailure = {
   id: string;
@@ -119,6 +124,7 @@ function updateAssetsInCache(
 
 export function App() {
   const { query: urlQuery, updateQuery } = useAssetUrlQuery();
+  const isOnline = useOnlineStatus();
 
   const q = urlQuery.q ?? '';
   const status = urlQuery.status ?? [];
@@ -139,8 +145,9 @@ export function App() {
   const { items, total, loading, error, loadingMore, hasNextPage, fetchNextPage } = useAssets({ q, status, kind, tag, sort, limit: 24 });
   const scrollRef = useInfiniteScroll({ hasNextPage, loading, loadingMore, onLoadMore: fetchNextPage });
 
-  const toggleSelect = useCallback((id: string, shiftKey = false) => {
-      if (bulkUpdating) {
+  const toggleSelect = useCallback(
+    (id: string, shiftKey = false) => {
+      if (bulkUpdating || !isOnline) {
         return;
       }
       setRetryableIds(new Set());
@@ -177,11 +184,11 @@ export function App() {
       });
       setLastSelectedId(id);
     },
-    [items, lastSelectedId, bulkUpdating],
+    [items, lastSelectedId, bulkUpdating, isOnline],
   );
 
   const selectAllLoaded = useCallback(() => {
-    if (bulkUpdating) {
+    if (bulkUpdating || !isOnline) {
       return;
     }
     setSelectedIds(
@@ -189,15 +196,18 @@ export function App() {
     );
     setRetryableIds(new Set());
     setRetryStatus(null);
-  }, [items, bulkUpdating]);
+  }, [items, bulkUpdating, isOnline]);
 
   const allLoadedSelected = items.length > 0 &&
     items.every((asset) =>
       selectedIds.has(asset.id),
     );
 
-  async function applyBulkStatus( next: AssetStatus, idsToUpdate: string[] = [...selectedIds]) {
-    if (bulkUpdating) {
+  async function applyBulkStatus(
+    next: AssetStatus,
+    idsToUpdate: string[] = [...selectedIds],
+  ) {
+    if (bulkUpdating || !isOnline) {
       return;
     }
     const ids = idsToUpdate;
@@ -227,10 +237,7 @@ export function App() {
           ),
       );
 
-      const results = await runBulkStatusUpdate(
-        ids,
-        next,
-      );
+      const results = await runBulkStatusUpdate(ids, next);
 
       const failedIds = new Set<string>();
       const retryableFailedIds = new Set<string>();
@@ -241,10 +248,7 @@ export function App() {
           for (const result of chunkResult.result.results) {
             if (result.ok) {
               queryClient.setQueriesData<
-                InfiniteData<
-                  AssetPage,
-                  string | undefined
-                >
+                InfiniteData<AssetPage, string | undefined>
               >(
                 { queryKey: ['assets'] },
                 (data) =>
@@ -256,22 +260,25 @@ export function App() {
               );
             } else {
               failedIds.add(result.id);
-              const reason = result.message ?? result.code;
+
               const originalAsset = snapshot.get(result.id);
-              const retryable = result.code !== 'legal_hold';
+
+              const retryable =
+                result.code !== 'legal_hold';
+
               failures.push({
                 id: result.id,
                 name:
                   originalAsset?.name ??
                   result.id,
-                reason,
+                reason: getBulkFailureMessage(
+                  result.code,
+                ),
                 retryable,
               });
 
               if (retryable) {
-                retryableFailedIds.add(
-                  result.id,
-                );
+                retryableFailedIds.add(result.id);
               }
             }
           }
@@ -286,8 +293,10 @@ export function App() {
               id,
               name:
                 originalAsset?.name ?? id,
-              reason:
-                chunkResult.error.message,
+              reason: getUserFacingError(
+                chunkResult.error,
+                'The bulk update could not be completed. Please try again.',
+              ),
               retryable: true,
             });
 
@@ -319,7 +328,7 @@ export function App() {
       const applied = ids.length - failedIds.size;
       const failed = failedIds.size;
       if (failed === 0) {
-        setNotice( `${applied} updated successfully.` );
+        setNotice(`${applied} updated successfully.`);
         setSelectedIds(new Set());
         setLastSelectedId(null);
       } else {
@@ -332,12 +341,12 @@ export function App() {
         setLastSelectedId(lastFailedId);
       }
     } catch (error) {
-      const message =
-        error instanceof Error
-          ? error.message : 'Bulk update failed';
-
-      setNotice( `Bulk update failed. ${message}`,
+      const message = getUserFacingError(
+        error,
+        'The bulk update could not be completed. Please try again.',
       );
+
+      setNotice(`Bulk update failed. ${message}`);
     } finally {
       setBulkUpdating(false);
     }
@@ -359,6 +368,17 @@ export function App() {
 
   return (
     <div className="app">
+      {!isOnline && (
+        <div
+          className="offline-banner"
+          role="status"
+          aria-live="polite"
+        >
+          You're offline. Check your internet connection.
+          We'll reconnect automatically when you're back online.
+        </div>
+      )}
+
       <header className="topbar">
         <h1>MediaVault</h1>
         <input
@@ -366,10 +386,23 @@ export function App() {
           type="search"
           placeholder="Search assets"
           value={q}
-          onChange={(e) => updateQuery({ q: e.target.value })}
-          disabled={bulkUpdating}
+          onChange={(e) =>
+            updateQuery({ q: e.target.value })
+          }
+          disabled={bulkUpdating || !isOnline}
         />
-        <select value={sort} onChange={(e) => updateQuery({ sort: e.target.value as NonNullable<AssetQuery['sort']>})} disabled={bulkUpdating}>
+
+        <select
+          value={sort}
+          onChange={(e) =>
+            updateQuery({
+              sort: e.target.value as NonNullable<
+                AssetQuery['sort']
+              >,
+            })
+          }
+          disabled={bulkUpdating || !isOnline}
+        >
           {SORTS.map((option) => (
             <option key={option.value} value={option.value}>
               {option.label}
@@ -391,13 +424,18 @@ export function App() {
 
                 updateQuery({ status: nextStatus });
               }}
-              disabled={bulkUpdating}
+              disabled={bulkUpdating || !isOnline}
             />
             {statusLabel(s)}
           </label>
         ))}
+
         <span className="muted">
-          {loading ? 'Loading…' : error ? "Unable to load results..." : `${items.length} of ${total.toLocaleString()} shown`}
+          {loading
+            ? 'Loading…'
+            : error
+              ? 'Unable to load results...'
+              : `${items.length} of ${total.toLocaleString()} shown`}
         </span>
       </div>
 
@@ -408,24 +446,20 @@ export function App() {
               type="checkbox"
               checked={allLoadedSelected}
               onChange={(event) => {
-                if (bulkUpdating) {
+                if (bulkUpdating || !isOnline) {
                   return;
                 }
 
                 if (event.target.checked) {
                   selectAllLoaded();
                 } else {
-                  setSelectedIds(
-                    new Set(),
-                  );
+                  setSelectedIds(new Set());
                   setLastSelectedId(null);
-                  setRetryableIds(
-                    new Set(),
-                  );
+                  setRetryableIds(new Set());
                   setRetryStatus(null);
                 }
               }}
-              disabled={bulkUpdating}
+              disabled={bulkUpdating || !isOnline}
             />
 
             Select all loaded
@@ -440,13 +474,15 @@ export function App() {
                   onClick={() => {
                     void applyBulkStatus(s);
                   }}
-                  disabled={bulkUpdating}
+                  disabled={
+                    bulkUpdating || !isOnline
+                  }
                 >
                   {bulkUpdating
                     ? 'Updating…'
                     : `Set ${statusLabel(
-                        s,
-                      ).toLowerCase()}`}
+                      s,
+                    ).toLowerCase()}`}
                 </button>
               ))}
 
@@ -459,7 +495,9 @@ export function App() {
                         [...retryableIds],
                       );
                     }}
-                    disabled={bulkUpdating}
+                    disabled={
+                      bulkUpdating || !isOnline
+                    }
                   >
                     Retry failed (
                     {retryableIds.size})
@@ -472,13 +510,9 @@ export function App() {
                     return;
                   }
 
-                  setSelectedIds(
-                    new Set(),
-                  );
+                  setSelectedIds(new Set());
                   setLastSelectedId(null);
-                  setRetryableIds(
-                    new Set(),
-                  );
+                  setRetryableIds(new Set());
                   setRetryStatus(null);
                 }}
                 disabled={bulkUpdating}
@@ -490,7 +524,11 @@ export function App() {
         </div>
       )}
 
-      {notice && <p className="notice">{notice}</p>}
+      {notice && (
+        <p className="notice" role="status">
+          {notice}
+        </p>
+      )}
 
       <main className="content">
         {loading ? (
@@ -498,8 +536,14 @@ export function App() {
             Loading assets…
           </div>
         ) : error ? (
-          <div className="state-message error" role="alert">
-            Couldn’t load assets. {error}
+          <div
+            className="state-message error"
+            role="alert"
+          >
+            {getUserFacingError(
+              error,
+              'Unable to load assets. Please try again.',
+            )}
           </div>
         ) : (
           <AssetGrid

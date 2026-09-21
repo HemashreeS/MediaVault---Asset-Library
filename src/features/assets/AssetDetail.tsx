@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react';
 import { ApiError, getAsset, thumbnailUrl, updateAsset } from '@/api/client';
 import { formatBytes, formatDate, formatDuration, statusLabel } from '@/lib/format';
+import { getUserFacingError } from '@/lib/getUserFacingError';
+import { useOnlineStatus } from '@/lib/useOnlineStatus';
 import type { Asset, AssetStatus } from '@/lib/types';
 
 const STATUSES: AssetStatus[] = ['draft', 'in_review', 'approved', 'archived'];
@@ -12,10 +14,17 @@ interface Props {
 }
 
 /**
- * Baseline detail panel. Loads on open, saves with no optimistic update,
- * surfaces failures as raw strings, and does nothing about focus.
+ * Asset detail panel.
+ *
+ * - Loads the selected asset on open.
+ * - Protects writes while offline.
+ * - Handles legal-hold restrictions.
+ * - Handles 409 version conflicts by loading the latest server version.
+ * - Maps API failures to user-facing messages.
  */
 export function AssetDetail({ id, onClose, onSaved }: Props) {
+  const isOnline = useOnlineStatus();
+
   const [asset, setAsset] = useState<Asset | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
@@ -27,13 +36,23 @@ export function AssetDetail({ id, onClose, onSaved }: Props) {
     setThumbnailError(false);
     getAsset(id)
       .then(setAsset)
-      .catch((err: unknown) => setError(err instanceof Error ? err.message : 'Load failed'));
+      .catch((err: unknown) => {
+        setError(getUserFacingError(err, 'Unable to load this asset.'));
+      });
   }, [id]);
 
   async function setStatus(status: AssetStatus) {
     if (!asset || saving) {
       return;
     }
+
+    if (!isOnline) {
+      setError(
+        'You are offline. Reconnect to the internet before changing the asset status.',
+      );
+      return;
+    }
+
     if (asset.tags.includes('legal-hold')) {
       setError('This asset is on legal hold and its status cannot be changed.');
       return;
@@ -45,26 +64,26 @@ export function AssetDetail({ id, onClose, onSaved }: Props) {
       setAsset(updated);
       onSaved(updated);
     } catch (err) {
-      if ( err instanceof ApiError && err.code === 'version_conflict' ) {
+      if (err instanceof ApiError && err.code === 'version_conflict') {
         try {
           const latest = await getAsset(asset.id);
           setAsset(latest);
           onSaved(latest);
           setError(
             'This asset was changed by someone else. ' +
-            'The latest version has been loaded. ' +
-            'Please review it and apply your change again.',
+              'The latest version has been loaded. ' +
+              'Please review it and apply your change again.',
           );
         } catch (refreshError) {
           setError(
-            refreshError instanceof Error
-              ? `The asset was changed by someone else, but the latest version could not be loaded. ${refreshError.message}`
-              : 'The asset was changed by someone else, but the latest version could not be loaded.',
+            getUserFacingError(
+              refreshError,
+              'The asset changed, but the latest version could not be loaded. Please try again.',
+            ),
           );
         }
       } else {
-        const message = err instanceof Error ? err.message : 'Save failed';
-        setError(message);
+        setError(getUserFacingError(err, 'Unable to save this asset.'));
       }
     } finally {
       setSaving(false);
@@ -80,19 +99,20 @@ export function AssetDetail({ id, onClose, onSaved }: Props) {
       </div>
 
       {error && (
-        <p
-          className="error"
-          role="alert"
-        >
+        <p className="error" role="alert">
           {error}
         </p>
       )}
 
+      {!isOnline && (
+        <p className="muted" role="status" aria-live="polite">
+          You are offline. Status changes are disabled until your connection
+          returns.
+        </p>
+      )}
+
       {!asset && !error && (
-        <p
-          className="muted"
-          role="status"
-        >
+        <p className="muted" role="status">
           Loading…
         </p>
       )}
@@ -155,8 +175,7 @@ export function AssetDetail({ id, onClose, onSaved }: Props) {
           <p className="muted">Status</p>
           {isLegalHold && (
             <p className="muted" role="status">
-              Status cannot be changed because this
-              asset is on legal hold.
+              Status cannot be changed because this asset is on legal hold.
             </p>
           )}
 
@@ -164,7 +183,12 @@ export function AssetDetail({ id, onClose, onSaved }: Props) {
             {STATUSES.map((status) => (
               <button
                 key={status}
-                disabled={saving || isLegalHold || status === asset.status}
+                disabled={
+                  saving ||
+                  !isOnline ||
+                  isLegalHold ||
+                  status === asset.status
+                }
                 onClick={() => setStatus(status)}
               >
                 {statusLabel(status)}

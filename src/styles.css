@@ -292,6 +292,13 @@ button:disabled {
   font-size: 13px;
 }
 
+.offline-banner {
+  padding: 10px 16px;
+  text-align: center;
+  border-bottom: 1px solid currentColor;
+  font-weight: 600;
+}
+
 @media (max-width: 720px) {
   .content {
     flex-direction: column;
