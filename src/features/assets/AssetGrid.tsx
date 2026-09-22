@@ -1,4 +1,11 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import {
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type KeyboardEvent,
+  type Ref,
+} from 'react';
 import { useVirtualizer } from '@tanstack/react-virtual';
 
 import type { Asset } from '@/lib/types';
@@ -10,7 +17,7 @@ interface Props {
   activeId: string | null;
   onToggleSelect: (id: string, shiftKey?: boolean) => void;
   onOpen: (id: string) => void;
-  scrollRef?: React.Ref<HTMLDivElement>;
+  scrollRef?: Ref<HTMLDivElement>;
   loadingMore?: boolean;
 }
 
@@ -39,6 +46,10 @@ export function AssetGrid({
 
   const [columnCount, setColumnCount] = useState(1);
 
+  const [focusedId, setFocusedId] = useState<string | null>(
+    assets[0]?.id ?? null,
+  );
+
   useEffect(() => {
     const element = gridRef.current;
 
@@ -58,7 +69,7 @@ export function AssetGrid({
         1,
         Math.floor(
           (contentWidth + GRID_GAP) /
-          (CARD_MIN_WIDTH + GRID_GAP),
+            (CARD_MIN_WIDTH + GRID_GAP),
         ),
       );
 
@@ -83,12 +94,145 @@ export function AssetGrid({
     return result;
   }, [assets, columnCount]);
 
+  useEffect(() => {
+    if (assets.length === 0) {
+      setFocusedId(null);
+      return;
+    }
+
+    const focusedStillExists =
+      focusedId !== null &&
+      assets.some((asset) => asset.id === focusedId);
+
+    if (!focusedStillExists) {
+      const firstAsset = assets[0];
+
+      if (firstAsset) {
+        setFocusedId(firstAsset.id);
+      }
+    }
+  }, [assets, focusedId]);
+
   const rowVirtualizer = useVirtualizer({
     count: rows.length,
     getScrollElement: () => gridRef.current,
     estimateSize: () => CARD_HEIGHT + GRID_GAP,
     overscan: 2,
   });
+
+  /**
+   * Move keyboard focus to another asset.
+   *
+   * The grid is virtualized, so the target card may not currently
+   * exist in the DOM. We first ask the virtualizer to bring the
+   * target row into view, then focus the card after React renders it.
+   */
+  const moveFocus = (targetId: string) => {
+    const targetIndex = assets.findIndex(
+      (asset) => asset.id === targetId,
+    );
+
+    if (targetIndex === -1) {
+      return;
+    }
+
+    const targetRow = Math.floor(targetIndex / columnCount);
+
+    setFocusedId(targetId);
+
+    rowVirtualizer.scrollToIndex(targetRow, {
+      align: 'auto',
+    });
+
+    requestAnimationFrame(() => {
+      const target = gridRef.current?.querySelector<HTMLElement>(
+        `[data-asset-id="${CSS.escape(targetId)}"]`,
+      );
+
+      target?.focus();
+    });
+  };
+
+  const handleCardKeyDown = (
+    event: KeyboardEvent<HTMLDivElement>,
+    id: string,
+  ) => {
+    const currentIndex = assets.findIndex(
+      (asset) => asset.id === id,
+    );
+
+    if (currentIndex === -1) {
+      return;
+    }
+
+    const currentRow = Math.floor(currentIndex / columnCount);
+    const currentColumn = currentIndex % columnCount;
+
+    let targetIndex = -1;
+
+    switch (event.key) {
+      case 'ArrowRight':
+        if (currentIndex < assets.length - 1) {
+          targetIndex = currentIndex + 1;
+        }
+        break;
+
+      case 'ArrowLeft':
+        if (currentIndex > 0) {
+          targetIndex = currentIndex - 1;
+        }
+        break;
+
+      case 'ArrowDown': {
+        const nextIndex = currentIndex + columnCount;
+
+        if (nextIndex < assets.length) {
+          targetIndex = nextIndex;
+        }
+        break;
+      }
+
+      case 'ArrowUp': {
+        const previousIndex = currentIndex - columnCount;
+
+        if (previousIndex >= 0) {
+          targetIndex = previousIndex;
+        }
+        break;
+      }
+
+      case 'Enter':
+        event.preventDefault();
+        onOpen(id);
+        return;
+
+      case ' ':
+      case 'Spacebar':
+        event.preventDefault();
+        onToggleSelect(id, event.shiftKey);
+        return;
+
+      default:
+        return;
+    }
+
+    if (targetIndex === -1) {
+      return;
+    }
+
+    event.preventDefault();
+
+    const targetAsset = assets[targetIndex];
+
+    if (!targetAsset) {
+      return;
+    }
+
+    moveFocus(targetAsset.id);
+
+    void currentRow;
+    void currentColumn;
+  };
 
   if (assets.length === 0) {
     return (
@@ -102,7 +246,12 @@ export function AssetGrid({
   }
 
   return (
-    <div className="grid" ref={setGridRef}>
+    <div
+      className="grid"
+      ref={setGridRef}
+      role="grid"
+      aria-label="Assets"
+    >
       <div
         style={{
           height: rowVirtualizer.getTotalSize(),
@@ -123,6 +272,7 @@ export function AssetGrid({
               data-index={virtualRow.index}
               ref={rowVirtualizer.measureElement}
               className="asset-row"
+              role="row"
               style={{
                 position: 'absolute',
                 top: 0,
@@ -140,8 +290,11 @@ export function AssetGrid({
                   asset={asset}
                   selected={selectedIds.has(asset.id)}
                   active={activeId === asset.id}
+                  tabIndex={focusedId === asset.id ? 0 : -1}
+                  onFocus={setFocusedId}
                   onToggleSelect={onToggleSelect}
                   onOpen={onOpen}
+                  onKeyDown={handleCardKeyDown}
                 />
               ))}
             </div>
@@ -149,10 +302,7 @@ export function AssetGrid({
         })}
 
         {loadingMore && (
-          <div
-            className="load-more-status"
-            role="status"
-          >
+          <div className="load-more-status" role="status">
             Loading more assets…
           </div>
         )}

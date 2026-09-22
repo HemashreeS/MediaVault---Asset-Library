@@ -1,6 +1,16 @@
-import { useEffect, useState } from 'react';
+import {
+  useEffect,
+  useRef,
+  useState,
+  type KeyboardEvent,
+} from 'react';
 import { ApiError, getAsset, thumbnailUrl, updateAsset } from '@/api/client';
-import { formatBytes, formatDate, formatDuration, statusLabel } from '@/lib/format';
+import {
+  formatBytes,
+  formatDate,
+  formatDuration,
+  statusLabel,
+} from '@/lib/format';
 import { getUserFacingError } from '@/lib/getUserFacingError';
 import { useOnlineStatus } from '@/lib/useOnlineStatus';
 import type { Asset, AssetStatus } from '@/lib/types';
@@ -13,15 +23,6 @@ interface Props {
   onSaved: (asset: Asset) => void;
 }
 
-/**
- * Asset detail panel.
- *
- * - Loads the selected asset on open.
- * - Protects writes while offline.
- * - Handles legal-hold restrictions.
- * - Handles 409 version conflicts by loading the latest server version.
- * - Maps API failures to user-facing messages.
- */
 export function AssetDetail({ id, onClose, onSaved }: Props) {
   const isOnline = useOnlineStatus();
 
@@ -29,6 +30,7 @@ export function AssetDetail({ id, onClose, onSaved }: Props) {
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [thumbnailError, setThumbnailError] = useState(false);
+  const closeButtonRef = useRef<HTMLButtonElement | null>(null);
 
   useEffect(() => {
     setAsset(null);
@@ -37,9 +39,29 @@ export function AssetDetail({ id, onClose, onSaved }: Props) {
     getAsset(id)
       .then(setAsset)
       .catch((err: unknown) => {
-        setError(getUserFacingError(err, 'Unable to load this asset.'));
+        setError(
+          getUserFacingError(
+            err,
+            'Unable to load this asset.',
+          ),
+        );
       });
   }, [id]);
+
+  useEffect(() => {
+    const frame = requestAnimationFrame(() => {
+      closeButtonRef.current?.focus();
+    });
+
+    return () => cancelAnimationFrame(frame);
+  }, [id]);
+
+  function handleKeyDown(event: KeyboardEvent<HTMLElement>) {
+    if (event.key === 'Escape' && !saving) {
+      event.preventDefault();
+      onClose();
+    }
+  }
 
   async function setStatus(status: AssetStatus) {
     if (!asset || saving) {
@@ -54,7 +76,9 @@ export function AssetDetail({ id, onClose, onSaved }: Props) {
     }
 
     if (asset.tags.includes('legal-hold')) {
-      setError('This asset is on legal hold and its status cannot be changed.');
+      setError(
+        'This asset is on legal hold and its status cannot be changed.',
+      );
       return;
     }
     setSaving(true);
@@ -71,8 +95,8 @@ export function AssetDetail({ id, onClose, onSaved }: Props) {
           onSaved(latest);
           setError(
             'This asset was changed by someone else. ' +
-              'The latest version has been loaded. ' +
-              'Please review it and apply your change again.',
+            'The latest version has been loaded. ' +
+            'Please review it and apply your change again.',
           );
         } catch (refreshError) {
           setError(
@@ -92,10 +116,21 @@ export function AssetDetail({ id, onClose, onSaved }: Props) {
   const isLegalHold = asset?.tags.includes('legal-hold') ?? false;
 
   return (
-    <aside className="panel">
+    <aside
+      className="panel"
+      aria-label="Asset detail"
+      onKeyDown={handleKeyDown}
+    >
       <div className="panel__head">
         <h2>Asset detail</h2>
-        <button onClick={onClose} disabled={saving}>Close</button>
+
+        <button
+          ref={closeButtonRef}
+          onClick={onClose}
+          disabled={saving}
+        >
+          Close
+        </button>
       </div>
 
       {error && (
@@ -105,9 +140,13 @@ export function AssetDetail({ id, onClose, onSaved }: Props) {
       )}
 
       {!isOnline && (
-        <p className="muted" role="status" aria-live="polite">
-          You are offline. Status changes are disabled until your connection
-          returns.
+        <p
+          className="muted"
+          role="status"
+          aria-live="polite"
+        >
+          You are offline. Status changes are disabled until
+          your connection returns.
         </p>
       )}
 

@@ -23,6 +23,7 @@ Anything we need to know beyond `npm install && npm run dev`.
 - Task 2 - ~6 hrs
 - Task 3 - ~9 hrs
 - Task 4 - ~6 hrs
+- Task 5 - ~4 hrs
 
 ---
 
@@ -37,7 +38,7 @@ Anything we need to know beyond `npm install && npm run dev`.
 | 5 | All loaded assets are rendered without virtualization | `AssetGrid.tsx` | Fixed |
 | 6 | Search requests are fired on every keystroke | `App.tsx`, `useAssets.ts` | Fixed |
 | 7 | Cursor pagination is not implemented; the frontend only loads the initial 24 assets despite receiving nextCursor | `useAssets.ts` | Fixed |
-| 8 | Keyboard navigation, focus management and screen-reader feedback are missing | | |
+| 8 | Keyboard navigation, focus management and screen-reader feedback are missing | `AssetGrid.tsx`, `AssetCard.tsx`, `AssetDetail.tsx`, | Fixed |
 | 9 | Asset card content is clipped because the card uses overflow: hidden with the current layout | `styles.css` | Fixed |
 
 ---
@@ -70,6 +71,7 @@ six of these is about right.
 - Measured the result during scrolling and observed approximately 35 rendered cards while approximately 350 assets had been loaded.
 
 **Optimistic updates and rollback**
+
 - Bulk status changes update the React Query asset cache immediately, before the server confirms the operation.
 - Selected IDs are split into chunks of 50 to respect the API limit.
 - Chunks are processed with bounded concurrency rather than firing one request per asset or all chunks simultaneously.
@@ -120,8 +122,13 @@ The main bottlenecks were unnecessary rendering of the growing asset list and re
 ## Accessibility
 
 - Keyboard model you implemented, in one paragraph.
+The asset list uses a keyboard-oriented grid model with roving tabIndex. Users can move between cards with the arrow keys, press Enter to open the focused asset, and press Space to toggle selection. Opening the detail view transfers focus appropriately, Escape closes it, and focus returns to the triggering asset. Relevant loading, error, bulk-operation and connectivity states are exposed through live/status regions.
+
 - How you tested it, including any screen reader.
+Testing was performed using keyboard-only interaction, including moving through the grid, opening/closing the detail view, selecting assets, and checking focus behavior. Also by NVDA checked the live voice. 
+
 - Known gaps.
+Known gap is I did not complete a dedicated screen-reader test pass, so screen-reader-specific behavior is a known validation gap rather than something I am claiming as fully verified.
 
 ---
 
@@ -173,3 +180,4 @@ What you deliberately did not do, and what you would do with another day.
 - The offline handling and automatic recovery when connectivity returns.
 - The single-asset 409 version_conflict handling and the decision to load the latest server version instead of automatically overwriting it.
 - The application-level ErrorBoundary and recovery actions for unexpected component failures.
+- Accessibility is implemented.

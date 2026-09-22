@@ -1,4 +1,4 @@
-import { memo, useState } from 'react';
+import { memo, useState, type KeyboardEvent } from 'react';
 import { thumbnailUrl } from '@/api/client';
 import { formatBytes, formatDate, statusLabel } from '@/lib/format';
 import type { Asset } from '@/lib/types';
@@ -7,16 +7,22 @@ interface Props {
     asset: Asset;
     selected: boolean;
     active: boolean;
+    tabIndex: number;
+    onFocus: (id: string) => void;
     onToggleSelect: (id: string, shiftKey?: boolean) => void;
     onOpen: (id: string) => void;
+    onKeyDown: (event: KeyboardEvent<HTMLDivElement>, id: string) => void;
 }
 
 function AssetCardComponent({
     asset,
     selected,
     active,
+    tabIndex,
+    onFocus,
     onToggleSelect,
     onOpen,
+    onKeyDown,
 }: Props) {
     const [thumbnailError, setThumbnailError] = useState(false);
     const showThumbnail = asset.hasThumbnail && !thumbnailError;
@@ -24,7 +30,13 @@ function AssetCardComponent({
     return (
         <div
             className={`card ${selected ? 'card--selected' : ''} ${active ? 'card--active' : ''
-            }`}
+                }`}
+            data-asset-id={asset.id}
+            role="gridcell"
+            aria-selected={selected}
+            tabIndex={tabIndex}
+            onFocus={() => onFocus(asset.id)}
+            onKeyDown={(event) => onKeyDown(event, asset.id)}
             onClick={() => onOpen(asset.id)}
         >
             {showThumbnail ? (
@@ -63,9 +75,17 @@ function AssetCardComponent({
                     <input
                         type="checkbox"
                         checked={selected}
+                        aria-label={`Select ${asset.name}`}
+                        onChange={(event) => {
+                            onToggleSelect(
+                                asset.id,
+                                event.nativeEvent instanceof MouseEvent
+                                    ? event.nativeEvent.shiftKey
+                                    : false,
+                            );
+                        }}
                         onClick={(event) => {
                             event.stopPropagation();
-                            onToggleSelect(asset.id, event.shiftKey);
                         }}
                     />
                     Select

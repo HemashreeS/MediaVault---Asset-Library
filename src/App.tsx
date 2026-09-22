@@ -17,11 +17,11 @@ import { queryClient } from './lib/queryClient';
 
 const STATUSES: AssetStatus[] = ['draft', 'in_review', 'approved', 'archived'];
 const SORTS: Array<{ value: NonNullable<AssetQuery['sort']>; label: string }> = [
-    { value: 'updatedAt:desc', label: 'Recently updated' },
-    { value: 'name:asc', label: 'Name A–Z' },
-    { value: 'sizeBytes:desc', label: 'Largest first' },
-    { value: 'createdAt:desc', label: 'Newest' },
-  ];
+  { value: 'updatedAt:desc', label: 'Recently updated' },
+  { value: 'name:asc', label: 'Name A–Z' },
+  { value: 'sizeBytes:desc', label: 'Largest first' },
+  { value: 'createdAt:desc', label: 'Newest' },
+];
 
 function chunk<T>(items: T[], size: number): T[][] {
   const chunks: T[][] = [];
@@ -136,6 +136,7 @@ export function App() {
   const [lastSelectedId, setLastSelectedId] =
     useState<string | null>(null);
   const [activeId, setActiveId] = useState<string | null>(null);
+  const [returnFocusId, setReturnFocusId] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
 
   const [retryableIds, setRetryableIds] = useState<Set<string>>(new Set());
@@ -162,9 +163,9 @@ export function App() {
             (asset) => asset.id === id,
           );
           if (startIndex !== -1 && endIndex !== -1) {
-            const start = Math.min(startIndex,endIndex);
-            const end = Math.max(startIndex,endIndex);
-            for ( let index = start; index <= end; index += 1 ) {
+            const start = Math.min(startIndex, endIndex);
+            const end = Math.max(startIndex, endIndex);
+            for (let index = start; index <= end; index += 1) {
               const asset = items[index];
               if (asset) {
                 next.add(asset.id);
@@ -335,7 +336,7 @@ export function App() {
         const failureText = failures
           .map((failure) => `${failure.name} — ${failure.reason}`)
           .join('; ');
-        setNotice(`${applied} updated, ${failed} failed. ${failureText}` );
+        setNotice(`${applied} updated, ${failed} failed. ${failureText}`);
         setSelectedIds(failedIds);
         const lastFailedId = ids.find((id) => failedIds.has(id)) ?? null;
         setLastSelectedId(lastFailedId);
@@ -364,6 +365,53 @@ export function App() {
           () => asset,
         ),
     );
+  }
+
+  function handleOpenAsset(id: string) {
+    setReturnFocusId(id);
+    setActiveId(id);
+  }
+
+  function restoreGridFocus(id: string | null) {
+    requestAnimationFrame(() => {
+      if (id) {
+        const originalCard =
+          document.querySelector<HTMLElement>(
+            `[data-asset-id="${CSS.escape(id)}"]`,
+          );
+
+        if (originalCard) {
+          originalCard.focus();
+          return;
+        }
+      }
+
+      const currentGridCard =
+        document.querySelector<HTMLElement>(
+          '[role="gridcell"][tabindex="0"]',
+        );
+
+      if (currentGridCard) {
+        currentGridCard.focus();
+        return;
+      }
+
+      const firstGridCard =
+        document.querySelector<HTMLElement>(
+          '[role="gridcell"]',
+        );
+
+      firstGridCard?.focus();
+    });
+  }
+
+  function handleCloseAsset() {
+    const focusTargetId = returnFocusId;
+
+    setActiveId(null);
+    setReturnFocusId(null);
+
+    restoreGridFocus(focusTargetId);
   }
 
   return (
@@ -430,7 +478,8 @@ export function App() {
           </label>
         ))}
 
-        <span className="muted">
+        <span className="muted" aria-live="polite"
+          aria-atomic="true">
           {loading
             ? 'Loading…'
             : error
@@ -551,14 +600,14 @@ export function App() {
             selectedIds={selectedIds}
             activeId={activeId}
             onToggleSelect={toggleSelect}
-            onOpen={setActiveId}
+            onOpen={handleOpenAsset}
             scrollRef={scrollRef}
             loadingMore={loadingMore}
           />
         )}
 
         {activeId && (
-          <AssetDetail id={activeId} onClose={() => setActiveId(null)} onSaved={handleSaved} />
+          <AssetDetail id={activeId} onClose={handleCloseAsset} onSaved={handleSaved} />
         )}
       </main>
     </div>
