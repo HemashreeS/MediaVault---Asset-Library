@@ -9,6 +9,7 @@ chose not to do something.
 Paste your Loom (or equivalent) link here. 5–10 minutes.
 
 **Link:**
+https://drive.google.com/file/d/1HPaiAw2Jy_NAl_SpCvN7d4yafOua3oaQ/view?usp=drive_link
 
 ---
 
@@ -163,7 +164,8 @@ Checked the rendered interface using the WAVE Chrome extension; no contrast issu
 Replaced raw/ambiguous error presentation with user-facing messages that explain the problem more clearly, including actionable bulk-update and loading errors.
 
 Screenshots in the repo are welcome — link them here.
-
+![alt text](image.png)
+![alt text](image-1.png)
 ---
 
 ## Trade-offs and cuts
