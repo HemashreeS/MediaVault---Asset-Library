@@ -6,6 +6,12 @@
   --bg-soft: #f5f6f8;
   --accent: #2b5fd9;
   --danger: #a5301f;
+
+  --status-draft: #62676f;
+  --status-review: #8a5a00;
+  --status-approved: #216e4e;
+  --status-archived: #62676f;
+
   color-scheme: light;
 }
 
@@ -170,6 +176,9 @@ button:disabled {
 }
 .card__body {
   padding: 8px 10px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
 }
 .card__name {
   margin: 0 0 2px;
@@ -184,25 +193,43 @@ button:disabled {
   height: 18px;
 }
 
+.card__meta {
+  display: flex;
+  gap: 8px;
+  align-items: baseline;
+}
+
 .pill {
   display: inline-block;
   margin-top: 6px;
   padding: 1px 7px;
   border-radius: 10px;
   font-size: 12px;
+  font-weight: 500;
   background: var(--bg-soft);
   border: 1px solid var(--line);
 }
+
+.pill--draft {
+  color: var(--status-draft);
+  background: var(--bg-soft);
+  border-color: var(--line);
+}
+
 .pill--approved {
+  color: var(--status-approved);
   background: #e6f4ea;
   border-color: #b7dfc4;
 }
 .pill--in_review {
+  color: var(--status-review);
   background: #fff4e0;
   border-color: #ecd3a2;
 }
 .pill--archived {
-  color: var(--ink-soft);
+  color: var(--status-archived);
+  background: var(--bg-soft);
+  border-color: var(--line);
 }
 
 .panel {
@@ -299,7 +326,34 @@ button:disabled {
   font-weight: 600;
 }
 
+.state-message {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  justify-content: center;
+  padding: 32px 16px;
+  text-align: center;
+  color: var(--ink-soft);
+}
+
+.state-message--error {
+  color: var(--danger);
+}
+
 @media (max-width: 720px) {
+
+  .topbar,
+  .filters,
+  .bulkbar {
+    flex-wrap: wrap;
+  }
+
+  .search {
+    max-width: none;
+    min-width: 0;
+    flex-basis: 100%;
+  }
+
   .content {
     flex-direction: column;
   }

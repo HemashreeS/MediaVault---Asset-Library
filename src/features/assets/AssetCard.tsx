@@ -67,7 +67,9 @@ function AssetCardComponent({
                 </div>
 
                 <div className="card__meta">
-                    <span>{statusLabel(asset.status)}</span>
+                    <span className={`pill pill--${asset.status}`}>
+                        {statusLabel(asset.status)}
+                    </span>
                     <span>{formatDate(asset.updatedAt)}</span>
                 </div>
 

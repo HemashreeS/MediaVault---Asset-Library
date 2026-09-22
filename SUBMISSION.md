@@ -24,6 +24,7 @@ Anything we need to know beyond `npm install && npm run dev`.
 - Task 3 - ~9 hrs
 - Task 4 - ~6 hrs
 - Task 5 - ~4 hrs
+- Task 6 - ~3 hrs
 
 ---
 
@@ -137,13 +138,29 @@ Known gap is I did not complete a dedicated screen-reader test pass, so screen-r
 Three or four sentences: what you were optimising for, and the decisions that
 follow from it. Then briefly:
 
+The interface was kept intentionally restrained, with a small set of reusable colour, spacing and typography tokens defined in styles.css and applied consistently across the application. Asset cards give the name, selection state and status clear visual hierarchy, while the four statuses use consistent text labels and status treatments rather than relying on colour alone. Loading, empty, error, offline and partial-failure states provide clear feedback and actionable next steps without adding unnecessary visual decoration. Text contrast was checked using the WAVE Chrome extension, which reported no contrast issues.
+
 - **Visual system.** Your colour, spacing and type decisions, and where they live.
+
+Colour, spacing and typography are centralized in styles.css, including shared tokens for primary text, muted text, borders, backgrounds, accent, danger and asset-status treatments.
+
 - **Status treatment.** How the four statuses read as a progression, and how they
   stay distinguishable without relying on colour.
+
+Draft, In Review, Approved and Archived use consistent status pills with visible text labels, so their meaning does not depend on colour alone.
+
 - **States.** What you did with loading, empty, error, offline and partial
   failure.
+
+Loading, empty, error, offline, loading-more and partial bulk-failure states provide recognizable feedback and tell the user what is happening or what action is available.
+
 - **Contrast.** What you checked against, and with what.
-- **Copy.** Replaced the ambiguous error behavior with distinct messages `Couldn't load assets.`.
+
+Checked the rendered interface using the WAVE Chrome extension; no contrast issues were reported.
+
+- **Copy.** 
+
+Replaced raw/ambiguous error presentation with user-facing messages that explain the problem more clearly, including actionable bulk-update and loading errors.
 
 Screenshots in the repo are welcome — link them here.
 

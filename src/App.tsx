@@ -581,12 +581,12 @@ export function App() {
 
       <main className="content">
         {loading ? (
-          <div className="state-message" role="status">
+          <div className="state-message status-message--loading" role="status">
             Loading assets…
           </div>
         ) : error ? (
           <div
-            className="state-message error"
+            className="state-message status-message--error"
             role="alert"
           >
             {getUserFacingError(
