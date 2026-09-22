@@ -574,9 +574,17 @@ export function App() {
       )}
 
       {notice && (
-        <p className="notice" role="status">
-          {notice}
-        </p>
+        <div className="notice" role="status">
+          <span className="notice__message">{notice}</span>
+          <button
+            className="notice__close"
+            type="button"
+            aria-label="Dismiss notification"
+            onClick={() => setNotice(null)}
+          >
+            ×
+          </button>
+        </div>
       )}
 
       <main className="content">

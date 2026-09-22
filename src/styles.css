@@ -10,7 +10,8 @@
   --status-draft: #62676f;
   --status-review: #8a5a00;
   --status-approved: #216e4e;
-  --status-archived: #62676f;
+  --status-archived: #6b4f8a;
+  ;
 
   color-scheme: light;
 }
@@ -119,13 +120,38 @@ button:disabled {
   border-bottom: 1px solid var(--line);
 }
 
-.notice,
-.error {
+.notice {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
   margin: 0;
-  padding: 8px 16px;
+  padding: 8px 12px 8px 16px;
   font-size: 13px;
+  background: var(--bg-soft);
   border-bottom: 1px solid var(--line);
 }
+
+.notice__message {
+  min-width: 0;
+}
+
+.notice__close {
+  flex-shrink: 0;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  font-size: 20px;
+  line-height: 1;
+}
+
+.notice__close:hover:not(:disabled) {
+  background: var(--line);
+}
+
 .error {
   color: var(--danger);
 }
@@ -151,6 +177,7 @@ button:disabled {
   border-radius: 6px;
   background: var(--bg);
   cursor: pointer;
+  margin-bottom: 16px;
 }
 .card--selected {
   border-color: var(--accent);
@@ -228,8 +255,8 @@ button:disabled {
 }
 .pill--archived {
   color: var(--status-archived);
-  background: var(--bg-soft);
-  border-color: var(--line);
+  background: #f1ebf6;
+  border-color: #d8c8e3;
 }
 
 .panel {

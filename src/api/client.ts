@@ -1,5 +1,12 @@
 import type { Asset, AssetPage, AssetQuery, BulkResult } from '@/lib/types';
 
+const API_BASE_URL =
+  import.meta.env.VITE_API_BASE_URL ?? '';
+
+function apiUrl(path: string): string {
+  return `${API_BASE_URL}${path}`;
+}
+
 /**
  * Baseline client. It works on a good network and falls apart on a bad one.
  *
@@ -325,13 +332,13 @@ export function listAssets(
   signal?: AbortSignal,
 ): Promise<AssetPage> {
   return request<AssetPage>(
-    `/api/assets?${toSearchParams(query)}`,
+    apiUrl(`/api/assets?${toSearchParams(query)}`),
     { signal },
   );
 }
 
 export function getAsset(id: string): Promise<Asset> {
-  return request<Asset>(`/api/assets/${id}`);
+  return request<Asset>(apiUrl(`/api/assets/${id}`));
 }
 
 export function getAssetsByIds(
@@ -341,7 +348,7 @@ export function getAssetsByIds(
   missing: string[];
 }> {
   return request(
-    `/api/assets/batch?ids=${ids.join(',')}`,
+    apiUrl(`/api/assets/batch?ids=${ids.join(',')}`),
   );
 }
 
@@ -350,7 +357,7 @@ export function updateAsset(
   version: number,
   patch: Partial<Pick<Asset, 'name' | 'status' | 'tags'>>,
 ): Promise<Asset> {
-  return request<Asset>(`/api/assets/${id}`, {
+  return request<Asset>(apiUrl(`/api/assets/${id}`), {
       method: 'PATCH',
     body: JSON.stringify({ version, patch }),
   });
@@ -361,7 +368,7 @@ export function bulkSetStatus(
   status: Asset['status'],
 ): Promise<BulkResult> {
   return request<BulkResult>(
-    '/api/assets/bulk-status',
+    apiUrl('/api/assets/bulk-status'),
     {
       method: 'POST',
       body: JSON.stringify({
@@ -372,4 +379,4 @@ export function bulkSetStatus(
   );
 }
 
-export const thumbnailUrl = (id: string) => `/api/thumb/${id}.svg`;
+export const thumbnailUrl = (id: string) => apiUrl(`/api/thumb/${id}.svg`);
